@@ -1,0 +1,12 @@
+node_modules
+.next
+.vercel
+out
+build
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+.pnpm-store
+*.min.js
+*.min.css
