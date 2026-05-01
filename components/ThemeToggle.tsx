@@ -4,16 +4,35 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Theme toggle. Renders a stable placeholder during SSR/before hydration
+ * to avoid mismatch errors in aria-label / icon, then swaps to the real
+ * toggle once next-themes has resolved the user's preference.
+ */
 export function ThemeToggle({ className }: { className?: string }) {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // next-themes returns the wrong theme during SSR; wait for hydration.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
-  const current = theme === "system" ? resolvedTheme : theme;
-  const isDark = current === "dark";
+  if (!mounted) {
+    // Static placeholder — same DOM shape on server and client until hydrated.
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Toggle theme"
+        className={className}
+        suppressHydrationWarning
+      >
+        <span className="block size-4" />
+      </Button>
+    );
+  }
+
+  const isDark = resolvedTheme === "dark";
 
   return (
     <Button
@@ -24,7 +43,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={className}
     >
-      {mounted ? isDark ? <SunIcon /> : <MoonIcon /> : <span className="block size-4" />}
+      {isDark ? <SunIcon /> : <MoonIcon />}
     </Button>
   );
 }

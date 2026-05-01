@@ -18,7 +18,7 @@ type Props = {
 };
 
 type UploadingItem = {
-  id: string; // local id (filename + size)
+  id: string;
   filename: string;
   progress: number;
   error?: string;
@@ -28,7 +28,7 @@ export function UploadZone({ workspaceId, onCreateUploadSession, onConfirmUpload
   const router = useRouter();
   const [items, setItems] = useState<UploadingItem[]>([]);
   const [isPending, startTransition] = useTransition();
-  void workspaceId; // workspace context comes from server actions
+  void workspaceId;
 
   const onDrop = useCallback(
     async (acceptedFiles: File[], rejections: FileRejection[]) => {
@@ -59,7 +59,7 @@ export function UploadZone({ workspaceId, onCreateUploadSession, onConfirmUpload
 
           await onConfirmUpload(session.documentId);
           setItems((s) => s.filter((it) => it.id !== localId));
-          toast.success(`${file.name} uploaded — processing...`);
+          toast.success(`${file.name} uploaded — processing…`);
           startTransition(() => router.refresh());
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Upload failed";
@@ -85,41 +85,46 @@ export function UploadZone({ workspaceId, onCreateUploadSession, onConfirmUpload
       <div
         {...getRootProps()}
         className={cn(
-          "border-border bg-card hover:bg-accent/30 cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors",
-          isDragActive && "border-primary bg-accent/50",
+          "ds-empty cursor-pointer transition-colors",
+          isDragActive
+            ? "border-primary/50 bg-primary/5"
+            : "hover:border-border-2 hover:bg-card/40",
           isPending && "opacity-60",
         )}
       >
         <input {...getInputProps()} />
-        <UploadIcon className="text-muted-foreground mx-auto mb-3 h-8 w-8" />
-        <p className="text-sm font-medium">
-          {isDragActive ? "Drop PDFs here" : "Drag PDFs here, or click to browse"}
-        </p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Up to {Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB ·{" "}
-          {ALLOWED_MIME_TYPES.map((m) => m.split("/")[1]).join(", ")}
-        </p>
+        <UploadIcon className="text-muted-foreground size-7" />
+        <div className="space-y-1">
+          <div className="text-[13px] font-medium">
+            {isDragActive ? "Drop PDFs here" : "Drag PDFs here, or click to browse"}
+          </div>
+          <div className="ds-mono">
+            up to {Math.floor(MAX_FILE_BYTES / 1024 / 1024)}mb ·{" "}
+            {ALLOWED_MIME_TYPES.map((m) => m.split("/")[1]).join(", ")}
+          </div>
+        </div>
       </div>
 
       {items.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           {items.map((it) => (
             <li
               key={it.id}
-              className="border-border bg-card flex items-center gap-3 rounded-md border p-3 text-sm"
+              className="border-border bg-card flex items-center gap-3 rounded-md border px-3 py-2.5 text-[13px]"
             >
-              <div className="flex-1 truncate">{it.filename}</div>
+              <FileIcon className="text-muted-foreground size-4 shrink-0" />
+              <div className="flex-1 truncate font-medium">{it.filename}</div>
               {it.error ? (
-                <span className="text-destructive text-xs">{it.error}</span>
+                <span className="text-destructive font-mono text-[11px]">{it.error}</span>
               ) : (
                 <div className="flex w-32 items-center gap-2">
-                  <div className="bg-muted h-1.5 flex-1 overflow-hidden rounded-full">
+                  <div className="bg-muted h-[3px] flex-1 overflow-hidden rounded-full">
                     <div
                       className="bg-primary h-full transition-all"
                       style={{ width: `${it.progress}%` }}
                     />
                   </div>
-                  <span className="text-muted-foreground w-8 text-right text-xs">
+                  <span className="text-muted-foreground w-9 text-right font-mono text-[10px]">
                     {Math.round(it.progress)}%
                   </span>
                 </div>
@@ -168,6 +173,22 @@ function UploadIcon({ className }: { className?: string }) {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+function FileIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
     </svg>
   );
 }

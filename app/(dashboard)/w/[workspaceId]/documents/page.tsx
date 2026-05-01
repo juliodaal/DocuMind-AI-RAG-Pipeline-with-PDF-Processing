@@ -22,33 +22,43 @@ export default async function DocumentsPage({
   const { org } = await requireOrg(workspaceId);
   const documents = await listDocumentsForOrg(org.id);
 
-  // Server Actions are passed as bound props so client components can call them
   const createSession = createUploadSessionAction.bind(null, workspaceId);
   const confirmUpload = confirmUploadAction.bind(null, workspaceId);
   const deleteDoc = deleteDocumentAction.bind(null, workspaceId);
   const reprocess = reprocessDocumentAction.bind(null, workspaceId);
 
+  const readyCount = documents.filter((d) => d.status === "ready").length;
+  const totalChunks = documents.reduce((acc, d) => acc + (d.page_count ?? 0), 0);
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Documents</h1>
-        <p className="text-muted-foreground text-sm">
-          Upload PDFs to build the knowledge base for {org.name}.
-        </p>
+    <div className="mx-auto max-w-5xl px-5 py-10 sm:px-8">
+      <header className="ds-page-header flex items-end justify-between gap-4">
+        <div>
+          <span className="ds-eyebrow">workspace · library</span>
+          <h1 className="ds-page-title">Documents</h1>
+          <p className="ds-page-sub">
+            {readyCount} ready · {documents.length} total · ~{totalChunks} pages indexed
+          </p>
+        </div>
       </header>
 
-      <UploadZone
-        workspaceId={workspaceId}
-        onCreateUploadSession={createSession}
-        onConfirmUpload={confirmUpload}
-      />
+      <section className="space-y-8">
+        <UploadZone
+          workspaceId={workspaceId}
+          onCreateUploadSession={createSession}
+          onConfirmUpload={confirmUpload}
+        />
 
-      <DocumentList
-        workspaceId={workspaceId}
-        initialDocuments={documents}
-        onDeleteDocument={deleteDoc}
-        onReprocessDocument={reprocess}
-      />
+        <div>
+          <h2 className="ds-section-title">Library</h2>
+          <DocumentList
+            workspaceId={workspaceId}
+            initialDocuments={documents}
+            onDeleteDocument={deleteDoc}
+            onReprocessDocument={reprocess}
+          />
+        </div>
+      </section>
     </div>
   );
 }

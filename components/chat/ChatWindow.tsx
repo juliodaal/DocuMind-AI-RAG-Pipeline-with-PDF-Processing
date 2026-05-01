@@ -6,23 +6,25 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { toast } from "sonner";
 import { MessageList, type DisplayMessage } from "./MessageList";
 import { MessageInput } from "./MessageInput";
-import type { SourceCitation } from "./types";
 import type { ChatMessageMetadata } from "@/app/api/chat/route";
 
 type Props = {
   workspaceId: string;
   conversationId?: string;
+  conversationTitle?: string;
   initialMessages?: DisplayMessage[];
 };
 
 type ChatUIMessage = UIMessage<ChatMessageMetadata>;
 
-export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }: Props) {
+export function ChatWindow({
+  workspaceId,
+  conversationId,
+  conversationTitle,
+  initialMessages = [],
+}: Props) {
   const [input, setInput] = useState("");
 
-  // For new chats, generate the conversation UUID upfront so the URL becomes
-  // stable as soon as the first response starts streaming. useState with a
-  // lazy initializer keeps the value stable across renders without using a ref.
   const [activeConvId] = useState(() => conversationId ?? crypto.randomUUID());
   const isNewChat = !conversationId;
   const [hasNavigated, setHasNavigated] = useState(false);
@@ -32,11 +34,7 @@ export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }
       new DefaultChatTransport({
         api: "/api/chat",
         prepareSendMessagesRequest: ({ messages }) => ({
-          body: {
-            workspaceId,
-            conversationId: activeConvId,
-            messages,
-          },
+          body: { workspaceId, conversationId: activeConvId, messages },
         }),
       }),
     [workspaceId, activeConvId],
@@ -64,12 +62,6 @@ export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }
     },
   });
 
-  // For brand-new chats, update the URL to the permalink as soon as the
-  // assistant starts responding. We use the History API directly instead of
-  // router.replace because Next.js App Router unmounts the route segment on
-  // navigation — that would abort the in-flight stream and reset the chat.
-  // window.history.replaceState updates the address bar without unmounting,
-  // and the next deliberate navigation/refresh resyncs router state.
   useEffect(() => {
     if (hasNavigated || !isNewChat) return;
     const hasAssistant = messages.some((m) => m.role === "assistant");
@@ -91,12 +83,7 @@ export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }
     const lastAssistantIdx = findLastAssistantIndex(messages);
     return messages.map((m, i) => {
       const meta = (m.metadata as ChatMessageMetadata | undefined) ?? undefined;
-      let citations: SourceCitation[] | undefined;
-      if (m.role === "assistant") {
-        // While streaming, server attaches sources via messageMetadata 'start'.
-        // After finish, our DB-stored citations override (only [n] actually used).
-        citations = meta?.sources ?? [];
-      }
+      const citations = m.role === "assistant" ? (meta?.sources ?? []) : undefined;
       return {
         id: m.id,
         role: m.role as DisplayMessage["role"],
@@ -111,9 +98,19 @@ export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }
 
   return (
     <div className="flex h-[calc(100svh-3.5rem)] flex-col">
+      {(conversationTitle || display.length > 0) && (
+        <div className="border-border bg-background/85 flex h-11 items-center border-b px-5 backdrop-blur-md">
+          <span className="ds-eyebrow">conversation</span>
+          {conversationTitle && (
+            <span className="ml-3 truncate text-[13px] font-medium">{conversationTitle}</span>
+          )}
+        </div>
+      )}
       <MessageList messages={display} />
       {error && (
-        <div className="text-destructive mx-auto max-w-3xl px-4 py-2 text-sm">{error.message}</div>
+        <div className="text-destructive mx-auto max-w-3xl px-4 py-2 font-mono text-[11px]">
+          {error.message}
+        </div>
       )}
       <MessageInput
         value={input}

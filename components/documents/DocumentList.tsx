@@ -29,8 +29,6 @@ export function DocumentList({
   const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
 
-  // Derive the rendered list from props + realtime overrides.
-  // Avoids the setState-in-effect anti-pattern.
   const docs = useMemo(() => {
     const seen = new Set<string>();
     const result: Document[] = [];
@@ -40,16 +38,12 @@ export function DocumentList({
       result.push(o ?? d);
       seen.add(d.id);
     }
-    // Newly inserted docs from realtime that aren't in the prop yet
     for (const [id, o] of overrides.entries()) {
       if (o !== "deleted" && !seen.has(id)) result.unshift(o);
     }
     return result;
   }, [initialDocuments, overrides]);
 
-  // Realtime subscription for status updates within this workspace.
-  // Postgres Changes channels honor RLS — the JWT must be set on Realtime
-  // before subscribing or the broadcast filters out everything (silent miss).
   useEffect(() => {
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -60,8 +54,6 @@ export function DocumentList({
         data: { session },
       } = await supabase.auth.getSession();
       if (cancelled || !session) return;
-
-      // Force Realtime to use the current access token for RLS-aware channels.
       supabase.realtime.setAuth(session.access_token);
 
       channel = supabase
@@ -99,8 +91,10 @@ export function DocumentList({
 
   if (docs.length === 0) {
     return (
-      <div className="border-border bg-card rounded-lg border p-8 text-center">
-        <p className="text-muted-foreground text-sm">No documents yet. Upload a PDF above.</p>
+      <div className="ds-empty">
+        <FileIcon className="text-muted-foreground size-6" />
+        <div className="text-[13px] font-medium">No documents yet</div>
+        <p className="ds-mono">upload a pdf above to get started</p>
       </div>
     );
   }
@@ -126,43 +120,85 @@ export function DocumentList({
   async function handleReprocess(id: string, filename: string) {
     try {
       await onReprocessDocument(id);
-      toast.success(`Re-processing ${filename}...`);
+      toast.success(`Re-processing ${filename}…`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Re-process failed");
     }
   }
 
   return (
-    <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-lg border">
-      {docs.map((d) => (
-        <div key={d.id} className="flex items-center gap-3 p-3 text-sm">
-          <FileIcon className="text-muted-foreground h-5 w-5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium">{d.filename}</div>
-            <div className="text-muted-foreground flex gap-2 text-xs">
-              <span>{formatBytes(d.size_bytes)}</span>
-              {d.page_count != null ? <span>· {d.page_count} pages</span> : null}
-              <span>· {formatDistanceToNow(new Date(d.created_at), { addSuffix: true })}</span>
-              {d.error ? <span className="text-destructive">· {d.error}</span> : null}
-            </div>
-          </div>
-          <StatusBadge status={d.status} />
-          {d.status === "failed" && (
-            <Button size="sm" variant="outline" onClick={() => handleReprocess(d.id, d.filename)}>
-              Retry
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={pendingDeletes.has(d.id) || d.status === "processing"}
-            onClick={() => handleDelete(d.id, d.filename)}
-            aria-label={`Delete ${d.filename}`}
-          >
-            <TrashIcon className="h-4 w-4" />
-          </Button>
-        </div>
-      ))}
+    <div className="border-border overflow-hidden rounded-[10px] border">
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-border border-b">
+            <th className="ds-label py-2.5 pr-3 pl-4 text-left">file</th>
+            <th className="ds-label hidden py-2.5 pr-3 text-left sm:table-cell">size</th>
+            <th className="ds-label hidden py-2.5 pr-3 text-left md:table-cell">pages</th>
+            <th className="ds-label hidden py-2.5 pr-3 text-left lg:table-cell">added</th>
+            <th className="ds-label py-2.5 pr-3 text-left">status</th>
+            <th className="py-2.5 pr-3" />
+          </tr>
+        </thead>
+        <tbody>
+          {docs.map((d) => (
+            <tr
+              key={d.id}
+              className="group border-border/60 border-b transition-colors last:border-0 hover:bg-white/[0.02]"
+            >
+              <td className="py-3 pr-3 pl-4">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <FileIcon className="text-muted-foreground size-4 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium" title={d.filename}>
+                      {d.filename}
+                    </div>
+                    {d.error && (
+                      <div className="text-destructive mt-0.5 truncate font-mono text-[10px]">
+                        {d.error}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td className="text-foreground/60 hidden py-3 pr-3 font-mono text-[11px] sm:table-cell">
+                {formatBytes(d.size_bytes)}
+              </td>
+              <td className="text-foreground/60 hidden py-3 pr-3 font-mono text-[11px] md:table-cell">
+                {d.page_count ?? "—"}
+              </td>
+              <td className="text-foreground/50 hidden py-3 pr-3 font-mono text-[11px] lg:table-cell">
+                {formatDistanceToNow(new Date(d.created_at), { addSuffix: true })}
+              </td>
+              <td className="py-3 pr-3">
+                <StatusBadge status={d.status} />
+              </td>
+              <td className="py-3 pr-3">
+                <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  {d.status === "failed" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="font-mono text-[11px]"
+                      onClick={() => handleReprocess(d.id, d.filename)}
+                    >
+                      retry
+                    </Button>
+                  )}
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    disabled={pendingDeletes.has(d.id) || d.status === "processing"}
+                    onClick={() => handleDelete(d.id, d.filename)}
+                    aria-label={`Delete ${d.filename}`}
+                  >
+                    <TrashIcon className="size-3.5" />
+                  </Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

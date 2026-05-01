@@ -39,6 +39,7 @@ export default async function ConversationPage({
     <ChatWindow
       workspaceId={workspaceId}
       conversationId={convId}
+      conversationTitle={conv.title ?? undefined}
       initialMessages={initialMessages}
     />
   );

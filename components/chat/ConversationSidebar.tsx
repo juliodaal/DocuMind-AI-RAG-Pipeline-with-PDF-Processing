@@ -19,12 +19,9 @@ type Props = {
 export function ConversationSidebar(props: Props) {
   return (
     <>
-      {/* Desktop: fixed sidebar */}
-      <aside className="border-border bg-card hidden h-[calc(100svh-3.5rem)] w-64 shrink-0 flex-col border-r md:flex">
+      <aside className="border-sidebar-border bg-sidebar hidden h-[calc(100svh-3.5rem)] w-60 shrink-0 flex-col border-r md:flex">
         <SidebarBody {...props} />
       </aside>
-
-      {/* Mobile: hamburger + Sheet */}
       <MobileSidebar {...props} />
     </>
   );
@@ -34,9 +31,6 @@ function MobileSidebar(props: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // Auto-close drawer on route change. Intentional sync — eslint flags any
-  // setState-in-effect, but this is the canonical pattern for closing a
-  // dialog when its triggering navigation completes.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(false);
@@ -68,7 +62,6 @@ function SidebarBody({ workspaceId, conversations, onDeleteConversation }: Props
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
 
-  // Derived list — props are the source of truth; deletions are an overlay.
   const list = conversations.filter((c) => !deleted.has(c.id));
 
   async function handleDelete(id: string) {
@@ -87,23 +80,24 @@ function SidebarBody({ workspaceId, conversations, onDeleteConversation }: Props
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-border border-b p-3">
-        <Button asChild className="w-full justify-start gap-2" size="sm">
+      <div className="border-sidebar-border border-b px-3 py-3">
+        <Button asChild className="w-full justify-start gap-2 font-mono text-[12px]" size="sm">
           <Link href={`/w/${workspaceId}/chat`}>
             <PlusIcon className="size-3.5" />
             New chat
           </Link>
         </Button>
       </div>
+      <div className="px-4 pt-4 pb-2">
+        <span className="ds-label">Recent</span>
+      </div>
       <ScrollArea className="flex-1">
         {list.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-6 text-center text-xs">
-            No conversations yet.
-            <br />
-            Start one above.
+          <p className="text-muted-foreground px-4 py-2 font-mono text-[11px]">
+            no conversations yet
           </p>
         ) : (
-          <ul className="space-y-0.5 p-2">
+          <ul className="px-1.5">
             {list.map((c) => {
               const active = params.convId === c.id;
               return (
@@ -111,10 +105,10 @@ function SidebarBody({ workspaceId, conversations, onDeleteConversation }: Props
                   <Link
                     href={`/w/${workspaceId}/chat/${c.id}`}
                     className={cn(
-                      "block truncate rounded-md px-3 py-2 pr-8 text-sm transition-colors",
+                      "block truncate border-l-2 py-1.5 pr-8 pl-3 font-mono text-[12px] transition-colors",
                       active
-                        ? "bg-accent text-accent-foreground"
-                        : "text-foreground/80 hover:bg-accent/60 hover:text-accent-foreground",
+                        ? "border-primary bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground hover:text-foreground border-transparent hover:bg-white/[0.025]",
                     )}
                     title={c.title ?? "Untitled chat"}
                   >
@@ -124,7 +118,7 @@ function SidebarBody({ workspaceId, conversations, onDeleteConversation }: Props
                     type="button"
                     aria-label="Delete conversation"
                     onClick={() => handleDelete(c.id)}
-                    className="text-muted-foreground hover:text-destructive absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                    className="text-muted-foreground hover:text-destructive absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                   >
                     <TrashIcon className="size-3.5" />
                   </button>

@@ -32,36 +32,35 @@ export function DashboardShell({ user, orgs, children }: Props) {
 
   return (
     <div className="bg-background flex min-h-svh flex-col">
-      <header className="border-border bg-background/80 sticky top-0 z-30 border-b backdrop-blur-md">
-        <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
+      <header className="border-border bg-background/85 sticky top-0 z-30 border-b backdrop-blur-md">
+        <div className="flex h-14 items-center gap-2 px-3 sm:gap-4 sm:px-5">
           <Link
             href={`/w/${currentOrg.id}`}
-            className="flex items-center gap-1.5 font-semibold tracking-tight"
+            className="flex items-center gap-2 font-mono text-[15px] tracking-tight"
           >
-            <LogoMark />
-            <span className="hidden sm:inline">
-              DocuMind <span className="text-primary">AI</span>
-            </span>
+            <span className="text-foreground font-medium">d</span>
+            <span className="text-foreground/40 -ml-1">ocumind</span>
+            <span className="text-primary -ml-0.5">.</span>
           </Link>
-          <Separator orientation="vertical" className="mx-1 hidden h-6 sm:block" />
+          <Separator orientation="vertical" className="mx-1 hidden h-5 sm:block" />
           <WorkspaceSwitcher orgs={orgs} currentId={currentOrg.id} />
 
-          <nav className="ml-2 hidden items-center gap-0.5 md:flex">
+          <nav className="ml-3 hidden items-center gap-0.5 md:flex">
             <NavLink href={`/w/${currentOrg.id}`} label="Overview" />
-            <NavLink href={`/w/${currentOrg.id}/documents`} label="Documents" />
+            <NavLink href={`/w/${currentOrg.id}/documents`} label="Documents" matchPrefix />
             <NavLink href={`/w/${currentOrg.id}/chat`} label="Chat" matchPrefix />
           </nav>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1.5">
             <ThemeToggle />
             <UserMenu email={user.email} initial={initial} />
           </div>
         </div>
 
-        {/* Mobile nav */}
+        {/* Mobile nav row */}
         <nav className="border-border flex items-center gap-0.5 border-t px-2 py-1 md:hidden">
           <NavLink href={`/w/${currentOrg.id}`} label="Overview" />
-          <NavLink href={`/w/${currentOrg.id}/documents`} label="Documents" />
+          <NavLink href={`/w/${currentOrg.id}/documents`} label="Documents" matchPrefix />
           <NavLink href={`/w/${currentOrg.id}/chat`} label="Chat" matchPrefix />
         </nav>
       </header>
@@ -86,13 +85,12 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-        active
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
+        "relative rounded-md px-3 py-1.5 font-mono text-[12px] transition-colors",
+        active ? "text-foreground" : "text-foreground/45 hover:text-foreground/80",
       )}
     >
       {label}
+      {active && <span className="bg-primary absolute right-3 bottom-0 left-3 h-px rounded-full" />}
     </Link>
   );
 }
@@ -102,24 +100,29 @@ function WorkspaceSwitcher({ orgs, currentId }: { orgs: Organization[]; currentI
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
-          <span className="bg-primary/10 text-primary inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold">
+        <Button variant="ghost" size="sm" className="gap-2 font-mono text-[12px]">
+          <span className="bg-primary/10 text-primary border-primary/25 inline-flex h-5 w-5 items-center justify-center rounded-sm border text-[10px] font-semibold">
             {current.name[0]?.toUpperCase() ?? "?"}
           </span>
-          <span className="max-w-[140px] truncate text-sm font-medium sm:max-w-[200px]">
-            {current.name}
-          </span>
+          <span className="max-w-[140px] truncate sm:max-w-[200px]">{current.name}</span>
           <ChevronIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+        <DropdownMenuLabel className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-50">
+          Workspaces
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {orgs.map((o) => (
           <DropdownMenuItem key={o.id} asChild>
-            <Link href={`/w/${o.id}`} className="flex items-center justify-between">
+            <Link
+              href={`/w/${o.id}`}
+              className="flex items-center justify-between font-mono text-[12px]"
+            >
               <span className="truncate">{o.name}</span>
-              <span className="text-muted-foreground ml-2 text-[10px] uppercase">{o.role}</span>
+              <span className="text-muted-foreground ml-2 text-[9px] tracking-[0.1em] uppercase">
+                {o.role}
+              </span>
             </Link>
           </DropdownMenuItem>
         ))}
@@ -134,19 +137,23 @@ function UserMenu({ email, initial }: { email: string; initial: string }) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" className="rounded-full" aria-label="Account menu">
           <Avatar className="size-7">
-            <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+            <AvatarFallback className="bg-secondary text-foreground/80 text-[10px]">
+              {initial}
+            </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="truncate text-xs font-normal">
-          <div className="text-muted-foreground">Signed in as</div>
-          <div className="text-foreground mt-0.5 truncate font-medium">{email}</div>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="font-normal">
+          <div className="font-mono text-[9px] tracking-[0.1em] uppercase opacity-50">
+            Signed in as
+          </div>
+          <div className="text-foreground mt-1 truncate text-[13px]">{email}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <form action={logoutAction}>
           <DropdownMenuItem asChild>
-            <button type="submit" className="w-full text-left">
+            <button type="submit" className="w-full text-left font-mono text-[12px]">
               Sign out
             </button>
           </DropdownMenuItem>
@@ -156,18 +163,10 @@ function UserMenu({ email, initial }: { email: string; initial: string }) {
   );
 }
 
-function LogoMark() {
-  return (
-    <span className="from-primary to-primary/60 inline-flex size-7 items-center justify-center rounded-md bg-gradient-to-br text-[11px] font-bold text-white shadow-sm">
-      D
-    </span>
-  );
-}
-
 function ChevronIcon() {
   return (
     <svg
-      className="h-4 w-4 opacity-50"
+      className="h-3 w-3 opacity-40"
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"
