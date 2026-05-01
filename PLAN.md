@@ -4,115 +4,155 @@
 
 **Antes de empezar — pre-requisitos** (15 min):
 
-- [ ] Cuenta Supabase (proyecto nuevo free tier; Storage habilitado por defecto)
-- [ ] Cuenta OpenAI (API key — usaremos `gpt-4o-mini` y `text-embedding-3-small`, cuesta céntimos)
-- [ ] Cuenta Inngest (free tier — 50k step runs/mes)
-- [ ] Cuenta Upstash (Redis free tier — 10k req/día)
-- [ ] Node 20+ instalado, pnpm preferido (`npm i -g pnpm` si no lo tienes)
-- [ ] Cuenta Vercel conectada a GitHub (free hobby tier)
-- [ ] Git configurado localmente
+- [x] Cuenta Supabase (proyecto nuevo free tier; Storage habilitado por defecto)
+- [x] Cuenta OpenAI (API key — usaremos `gpt-4o-mini` y `text-embedding-3-small`, cuesta céntimos)
+- [x] Cuenta Inngest (free tier — 50k step runs/mes)
+- [x] Cuenta Upstash (Redis free tier — 10k req/día)
+- [x] Node 22.16.0 + pnpm 10.11.0 instalados
+- [ ] Cuenta Vercel conectada a GitHub (free hobby tier) — pendiente para Fase 9
+- [x] Git configurado localmente
 
 ---
 
-## FASE 0 — Setup del proyecto (40 min)
+## FASE 0 — Setup del proyecto ✅ COMPLETADA
 
-### 0.1 Inicializar repo
+> Commit: `0500af0 chore: project scaffold (Fase 0)`. Verificado con `pnpm typecheck` y `pnpm build`.
 
-- [ ] `pnpm dlx create-next-app@latest documind-ai --ts --tailwind --app --src-dir=false --import-alias="@/*"`
-- [ ] `cd documind-ai && git init && git branch -M main`
-- [ ] Crear `.gitignore` extra: `.env.local`, `.env.*.local`, `coverage/`, `playwright-report/`, `test-results/`
+### 0.1 Inicializar repo ✅
 
-### 0.2 Tooling de calidad
+- [x] Next.js 15 (16.2.4) + React 19.2.4 + Tailwind v4 + TypeScript 5 con `pnpm create next-app@latest`
+- [x] Creado en `/tmp` con nombre válido (`documind-ai-init`) y movido a `D:\code\SaaS\DocuMind AI\` por restricción de naming de npm (espacios y mayúsculas)
+- [x] Branch `main` con `git init -b main`
+- [x] `.gitignore` extendido: env files, coverage, playwright-report, test-results, .vscode, .idea, logs
 
-- [ ] Instalar: `pnpm add -D vitest @vitest/ui @testing-library/react @testing-library/jest-dom jsdom`
-- [ ] Instalar: `pnpm add -D @playwright/test`
-- [ ] Instalar: `pnpm add -D eslint-config-prettier prettier prettier-plugin-tailwindcss`
-- [ ] Instalar: `pnpm add -D husky lint-staged`
-- [ ] Configurar `vitest.config.ts` con alias `@/*` y `setupFiles`
-- [ ] Configurar `playwright.config.ts` (baseURL `http://localhost:3000`)
-- [ ] Configurar `.prettierrc` + `.prettierignore`
-- [ ] Configurar `tsconfig.json`: `strict: true`, `noUncheckedIndexedAccess: true`
-- [ ] `npx husky init` + hook `pre-commit` con `lint-staged`
-- [ ] Scripts en `package.json`: `dev`, `build`, `lint`, `typecheck`, `test`, `test:watch`, `test:e2e`, `format`
+### 0.2 Tooling de calidad ✅
 
-### 0.3 shadcn/ui
+- [x] Vitest 4.1.5 + @vitest/ui + @vitejs/plugin-react + Testing Library (react/jest-dom/user-event) + jsdom
+- [x] Playwright 1.59 + Chromium browser
+- [x] Prettier 3.8.3 + prettier-plugin-tailwindcss + eslint-config-prettier
+- [x] Husky 9.1.7 + lint-staged 16.4.0 (pre-commit hook activo)
+- [x] tsx 4.21 + Zod 4.4.1
+- [x] `vitest.config.ts` con jsdom + alias `@/*` + setup file
+- [x] `playwright.config.ts` con baseURL, retain-on-failure traces/screenshots/videos
+- [x] `.prettierrc.json` + `.prettierignore`
+- [x] `tsconfig.json`: `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `forceConsistentCasingInFileNames`, target ES2022
+- [x] Husky pre-commit hook ejecuta `pnpm exec lint-staged`
+- [x] Scripts en `package.json`: `dev`, `build`, `lint`, `lint:fix`, `typecheck`, `format`, `format:check`, `test`, `test:watch`, `test:ui`, `test:e2e`, `test:e2e:ui`, `eval`, `prepare`
 
-- [ ] `pnpm dlx shadcn@latest init` (estilo: New York, base color: slate, RSC: yes)
-- [ ] `pnpm dlx shadcn@latest add button input textarea card dialog dropdown-menu sonner avatar badge skeleton scroll-area`
+### 0.3 shadcn/ui ✅
 
-### 0.4 Variables de entorno
+- [x] `shadcn@latest init --defaults` (preset: base-nova, Tailwind v4 detectado)
+- [x] 15 componentes agregados: button, input, textarea, card, dialog, dropdown-menu, sonner, avatar, badge, skeleton, scroll-area, label, alert, tooltip, separator
+- [x] `lib/utils.ts` con `cn()` helper (clsx + tailwind-merge)
 
-- [ ] Crear `.env.example` con todas las claves (sin valores)
-- [ ] Crear `.env.local` con valores reales
-- [ ] Validar env vars con `zod` en `lib/env.ts` (T3-style):
+### 0.4 Variables de entorno ✅
 
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-SUPABASE_STORAGE_BUCKET     # ej: "documents"
-OPENAI_API_KEY
-OPENAI_CHAT_MODEL           # default: "gpt-4o-mini"
-OPENAI_EMBEDDING_MODEL      # default: "text-embedding-3-small"
-INNGEST_EVENT_KEY
-INNGEST_SIGNING_KEY
-UPSTASH_REDIS_REST_URL
-UPSTASH_REDIS_REST_TOKEN
-```
+- [x] `.env.example` con todas las claves documentadas
+- [x] `.env.local` con valores reales (en .gitignore)
+- [x] `lib/env.ts` con validación Zod (server schema + client schema separados, `isServer` detection)
+- [x] `scripts/check-env.ts` para verificar parsing — todas las 11 keys cargan OK
+- Variables validadas:
+  - Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`
+  - OpenAI: `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL` (default `gpt-4o-mini`), `OPENAI_EMBEDDING_MODEL` (default `text-embedding-3-small`)
+  - Inngest: `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` (opcionales en dev)
+  - Upstash: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (opcionales)
 
-### 0.5 Estructura de carpetas
+### 0.5 Estructura de carpetas ✅
 
-- [ ] Crear todas las carpetas del árbol definido en ARCHITECTURE.md sección 7
-- [ ] Commit inicial: `chore: project scaffold`
+- [x] `app/api/{chat,inngest,upload}/`
+- [x] `components/{chat,documents,workspace,ui}/` (15 componentes shadcn)
+- [x] `lib/{auth,db/queries,storage,ingestion,rag,llm,ratelimit,observability,inngest}/`
+- [x] `supabase/migrations/`
+- [x] `tests/{unit,integration,e2e,eval,fixtures}/` con `tests/setup.ts`
+- [x] `.github/workflows/`
+- [x] `scripts/` (utility scripts)
+- [x] `README.md` profesional con badges, stack, quickstart, scripts
+- [x] `.nvmrc` con Node 20
+
+### Verificaciones de Fase 0 ✅
+
+- [x] `pnpm typecheck` → 0 errores
+- [x] `pnpm build` → 4 rutas estáticas generadas, sin warnings críticos
+- [x] Pre-commit hook verificado: prettier reformateó automáticamente al commit
+- [x] `pnpm exec tsx scripts/check-env.ts` → todas las env vars parseadas correctamente
 
 ---
 
-## FASE 1 — Auth + Multi-tenancy (60 min)
+## FASE 1 — Auth + Multi-tenancy ✅ COMPLETADA
 
-### 1.1 Supabase setup
+> Migraciones aplicadas, trigger de signup verificado E2E (programmatically), middleware redirige correctamente.
 
-- [ ] En el dashboard Supabase: habilitar email auth (sin confirmación para dev)
-- [ ] (Opcional) Habilitar Google OAuth
-- [ ] Instalar: `pnpm add @supabase/supabase-js @supabase/ssr`
-- [ ] Crear `lib/auth/server.ts` (cliente server-side con cookies)
-- [ ] Crear `lib/auth/client.ts` (cliente browser)
-- [ ] Crear `middleware.ts` que refresca sesión y redirige `/login` si no autenticado en `/(dashboard)`
+### 1.1 Supabase setup ✅
 
-### 1.2 Migraciones — schema base
+- [x] Email auth habilitado por defecto en Supabase (gestión: dashboard → Authentication → Providers)
+- [x] Instalado `@supabase/supabase-js` + `@supabase/ssr` + `supabase` CLI (devDep) + `@next/env` (devDep)
+- [x] `lib/auth/server.ts` — `createClient()` server-side con cookies (`@supabase/ssr` `createServerClient`)
+- [x] `lib/auth/client.ts` — `createClient()` browser-side
+- [x] `lib/auth/admin.ts` — service-role client (bypass RLS, server-only, `persistSession: false`)
+- [x] `lib/auth/middleware.ts` — refresca sesión en cada request + redirect a `/login` si no auth + redirect a `/dashboard` si auth en login/signup
+- [x] `middleware.ts` (root) — matcher excluye assets estáticos
+- [x] `lib/auth/require-org.ts` — `requireOrg(workspaceId)`, `requireUser()`, `listUserOrgs(userId)`
 
-- [ ] `pnpm dlx supabase init` + `pnpm dlx supabase login` + `pnpm dlx supabase link`
-- [ ] Crear `supabase/migrations/0001_init.sql`:
-  - `profiles` (id ref auth.users, email, full_name, avatar_url, created_at)
-  - `organizations` (id, name, slug unique, owner_id, plan default 'free', created_at)
-  - `organization_members` (org_id, user_id, role enum 'owner'|'admin'|'member', joined_at, PK compuesta)
-  - Trigger: al crear user en auth.users → insert profile + crear org personal + insert member as owner
-- [ ] `pnpm dlx supabase db push` (o aplicar via SQL editor)
+### 1.2 Migraciones — schema base ✅
 
-### 1.3 RLS policies (parte 1)
+- [x] `supabase/migrations/0001_init.sql`:
+  - `profiles` (id ref auth.users, email, full_name, avatar_url, created_at) + index en email
+  - `organizations` (id, name, slug unique, owner_id ref profiles, plan enum default 'free', created_at) + index en owner_id
+  - `organization_members` (org_id, user_id, role enum, joined_at, PK compuesta) + index en user_id
+  - Trigger `on_auth_user_created` → función `handle_new_user()` (security definer):
+    - Crea profile usando `raw_user_meta_data.full_name` o local-part del email como fallback
+    - Crea org personal con slug único (genera `-{md5}` random suffix si colisiona, hasta 5 reintentos)
+    - Inserta membership como owner
+    - Todo atómico dentro del trigger
+- [ ] **Pendiente: aplicar a la DB** vía Supabase CLI (requiere PAT del usuario)
 
-- [ ] Crear `supabase/migrations/0002_rls_base.sql`:
-  - `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` para todas
-  - `profiles`: select/update own
-  - `organizations`: select si es member; update si owner/admin
-  - `organization_members`: select si compartes org
+### 1.3 RLS policies (parte 1) ✅
 
-### 1.4 UI de auth
+- [x] `supabase/migrations/0002_rls_base.sql`:
+  - Helpers SQL `is_org_member(org)` y `org_role(org)` con `security definer + stable` para evitar recursión
+  - `profiles`: select/update own (id = auth.uid())
+  - `organizations`: select si es member, update si role in (owner, admin)
+  - `organization_members`: select si compartes org, insert/update/delete si role in (owner, admin)
+  - GRANT EXECUTE de los helpers a `authenticated`
 
-- [ ] `app/(auth)/login/page.tsx` — formulario email + password (Server Action)
-- [ ] `app/(auth)/signup/page.tsx`
-- [ ] `app/(auth)/layout.tsx` — layout centrado
-- [ ] Server Actions en `app/(auth)/actions.ts`: `login`, `signup`, `logout`
-- [ ] Toast de errores con `sonner`
+### 1.4 UI de auth ✅
 
-### 1.5 Layout dashboard + workspace switcher
+- [x] `app/(auth)/layout.tsx` — layout centrado con logo
+- [x] `app/(auth)/login/page.tsx` — passes `next` searchParam
+- [x] `app/(auth)/signup/page.tsx`
+- [x] `app/(auth)/actions.ts` — `loginAction`, `signupAction`, `logoutAction` (Server Actions con Zod validation, `useActionState` compatible)
+- [x] `components/auth/AuthForm.tsx` — form client component con `useActionState` + `useFormStatus`, validation errors inline, alert para errores de servidor
+- [x] `components/ui/sonner` — Toaster montado en root layout
 
-- [ ] `app/(dashboard)/layout.tsx` — sidebar + topbar
-- [ ] `components/workspace/WorkspaceSwitcher.tsx` (dropdown con orgs del user)
-- [ ] Helper `lib/auth/require-org.ts`: lee cookie `currentOrgId`, valida membership, devuelve `{ user, org }` o redirect
-- [ ] `/w/[workspaceId]/page.tsx` — placeholder dashboard
-- [ ] Test manual: signup → login → ver workspace personal
+### 1.5 Layout dashboard + workspace switcher ✅
 
-**Commit**: `feat(auth): supabase auth + multi-tenant orgs with RLS`
+- [x] `app/(dashboard)/layout.tsx` — gate con `requireUser()` + carga `listUserOrgs()`, redirige a `/login` si no hay orgs (edge case)
+- [x] `components/workspace/DashboardShell.tsx` — header con logo + workspace switcher + nav (Overview, Documents, Chat) + user menu con sign out
+- [x] WorkspaceSwitcher embedded — dropdown listando orgs con role badge
+- [x] `app/(dashboard)/dashboard/page.tsx` — auto-redirect a primer workspace del user
+- [x] `app/(dashboard)/w/[workspaceId]/page.tsx` — placeholder con cards de Documents + Chat
+- [x] `app/page.tsx` — landing pública con CTA a signup/login
+- [x] Metadata: title template `%s · DocuMind AI`
+
+### 1.6 Verificaciones técnicas ✅
+
+- [x] `pnpm typecheck` → 0 errores
+- [x] `pnpm build` → todas las rutas compilan (`/`, `/login`, `/signup`, `/dashboard`, `/w/[workspaceId]`) + middleware activo
+
+### 1.7 Aplicación a DB y verificación E2E ✅
+
+- [x] `pnpm dlx supabase link --project-ref <ref> --password <db-pwd>` con SUPABASE_ACCESS_TOKEN (PAT)
+- [x] `pnpm dlx supabase db push` aplicó 0001 + 0002 + 0003 sin errores
+- [x] Migración correctiva 0003 — `organizations.owner_id ON DELETE CASCADE` (descubierto via test E2E que RESTRICT bloqueaba la limpieza de users)
+- [x] `scripts/check-db.ts` — confirma que tablas `profiles`, `organizations`, `organization_members` existen y los helpers RPC `is_org_member` están expuestos
+- [x] `scripts/check-signup-trigger.ts` — crea user vía admin API → verifica que profile, org y membership se crean automáticamente → CASCADE delete limpia todo. PASSED
+- [x] `scripts/cleanup-test-data.ts` — utilitario para limpiar orphan test users
+- [x] Smoke tests del dev server:
+  - `GET /` → 200 (landing pública)
+  - `GET /login` → 200
+  - `GET /signup` → 200
+  - `GET /dashboard` (sin sesión) → 307 redirect a `/login` ✅ middleware funcionando
+- [x] Commit: `feat(auth): supabase auth + multi-tenant orgs with RLS`
 
 ---
 
