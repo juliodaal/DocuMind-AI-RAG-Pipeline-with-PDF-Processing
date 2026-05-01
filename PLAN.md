@@ -158,44 +158,67 @@
 
 ## FASE 2 — Schema de documentos + storage (40 min)
 
-### 2.1 Migración pgvector + tablas RAG
+## FASE 2 — Schema de documentos + Storage ✅ COMPLETADA
 
-- [ ] `supabase/migrations/0003_pgvector.sql`:
-  - `CREATE EXTENSION IF NOT EXISTS vector;`
-  - Tabla `documents` (campos en ARCHITECTURE.md §4)
-  - Tabla `document_chunks` con `embedding vector(1536)`, `content_tsv tsvector`
-  - Trigger para mantener `content_tsv` (update on insert/update of content)
+> 4 migraciones aplicadas, pgvector + Storage round-trip verificados E2E.
 
-### 2.2 Índices
+### 2.1 Migración pgvector + tablas RAG ✅
 
-- [ ] `supabase/migrations/0004_indexes.sql`:
-  - `CREATE INDEX ON document_chunks USING hnsw (embedding vector_cosine_ops);`
-  - `CREATE INDEX ON document_chunks USING gin (content_tsv);`
-  - `CREATE INDEX ON document_chunks (org_id, document_id);`
-  - `CREATE INDEX ON documents (org_id, status);`
+- [x] `supabase/migrations/0004_documents.sql`:
+  - `create extension if not exists vector;`
+  - `documents` table: id, org_id (CASCADE), uploader_id (SET NULL), filename, mime_type, storage_path, size_bytes, sha256, status (CHECK enum), error, page_count, created_at, processed_at
+  - `document_chunks` table: id, document_id (CASCADE), org_id (CASCADE), chunk_index, content, **content_tsv tsvector GENERATED ALWAYS AS** (no trigger needed), embedding vector(1536), page_number, token_count, metadata jsonb, created_at; UNIQUE (document_id, chunk_index)
+  - `usage_events` table: id, org_id, user_id, kind (CHECK), model, tokens_in, tokens_out, cost_cents (numeric 10,4), metadata jsonb, created_at — para per-tenant LLM cost tracking
 
-### 2.3 RLS sobre RAG tables
+### 2.2 Índices ✅
 
-- [ ] `supabase/migrations/0005_rls_rag.sql`:
-  - `documents`: select/insert/update/delete si user es member del `org_id`
-  - `document_chunks`: select si user es member del `org_id`
-  - Service role bypassea RLS (usado por Inngest worker)
+- [x] `supabase/migrations/0005_indexes.sql`:
+  - `documents`: btree (org_id, status) + (org_id, created_at desc) + (uploader_id)
+  - `document_chunks`: HNSW vector_cosine_ops + GIN content_tsv + btree (org_id, document_id) + btree (document_id, chunk_index)
+  - `usage_events`: btree (org_id, created_at desc) + (org_id, kind)
 
-### 2.4 Supabase Storage setup
+### 2.3 RLS sobre RAG tables ✅
 
-- [ ] En el dashboard Supabase → Storage → crear bucket `documents` (private)
-- [ ] `supabase/migrations/0006_storage_policies.sql` — políticas sobre `storage.objects` para el bucket `documents`:
-  - SELECT/INSERT/UPDATE/DELETE permitido si `(storage.foldername(name))[1]::uuid` está en los `org_id` del user (vía `organization_members`)
-  - Esto garantiza que el path `{org_id}/{doc_id}/{filename}` solo es accesible para members de ese org
-- [ ] Verificar que el bucket NO tiene "Public bucket" activado
-- [ ] `lib/storage/supabase.ts`:
-  - `getSignedUploadUrl(path, opts)` — usa `supabase.storage.from('documents').createSignedUploadUrl(path)`
-  - `getSignedDownloadUrl(path, expiresIn=300)` — `createSignedUrl(path, expiresIn)`
-  - `downloadObject(path)` — server-side con service role key, para el worker Inngest
+- [x] `supabase/migrations/0006_rls_documents.sql`:
+  - `documents`: SELECT/INSERT/UPDATE si member; DELETE si owner/admin OR uploader; INSERT requires `uploader_id = auth.uid()`
+  - `document_chunks`: SELECT si member only; INSERT/UPDATE/DELETE solo via service role (Inngest worker)
+  - `usage_events`: SELECT si owner/admin only; INSERT solo via service role
+
+### 2.4 Supabase Storage setup ✅
+
+- [x] `supabase/migrations/0007_storage.sql`:
+  - Bucket `documents` creado: private, max 25MB, allowed_mime_types=['application/pdf']
+  - Policies sobre `storage.objects` que validan `(string_to_array(name, '/'))[1]::uuid` contra `is_org_member()`
+  - Path layout: `{org_id}/{document_id}/{slugified-filename}`
+- [x] `lib/storage/keys.ts`:
+  - `STORAGE_BUCKET = "documents"`, `MAX_FILE_BYTES = 25MB`, `ALLOWED_MIME_TYPES = ["application/pdf"]`
+  - `slugifyFilename()` — lowercase, strip diacritics, replace non-alphanum, preserve extension
+  - `documentKey(orgId, docId, filename)` y `parseDocumentKey()`
+  - `validateUpload()` — defense-in-depth para client-side
+- [x] `lib/storage/supabase.ts`:
+  - `getSignedUploadUrl(path)` — para PUT directo del browser
+  - `getSignedDownloadUrl(path, expiresInSec=300)` — descarga temporal
+  - `downloadObject(path)` — server-side blob (Inngest worker)
   - `deleteObject(path)`
-- [ ] `lib/storage/keys.ts`: `documentKey(orgId, docId, filename)` → `${orgId}/${docId}/${slugify(filename)}`
 
-**Commit**: `feat(db): documents + chunks schema with pgvector and Supabase Storage`
+### 2.5 Database types + query helpers ✅
+
+- [x] `lib/db/types.ts` — types hand-rolled mirror del schema (Profile, Organization, Document, DocumentChunk, UsageEvent, etc.)
+- [x] `lib/db/queries/documents.ts`:
+  - `createUploadSession()` — insert document row + sign upload URL
+  - `markQueued()`, `updateDocumentStatus()` — usados por Inngest worker
+  - `listDocumentsForOrg()`, `getDocument()` — RLS-aware reads via user session
+
+### 2.6 Verificaciones técnicas ✅
+
+- [x] `pnpm typecheck` → 0 errores
+- [x] `pnpm build` → todas las rutas compilan
+- [x] `scripts/check-vector.ts` — crea user → org → document → chunk con embedding 1536-dim → verifica content_tsv generado → query vector ORDER BY distance → cleanup PASSED
+- [x] `scripts/check-storage.ts` — bucket privado validado → signed upload URL → PUT → download (bytes match) → delete → PASSED
+
+### 2.7 Commit
+
+- [ ] Commit: `feat(db): documents + chunks schema with pgvector and Supabase Storage`
 
 ---
 
