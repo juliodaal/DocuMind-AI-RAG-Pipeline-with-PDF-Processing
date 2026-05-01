@@ -47,37 +47,53 @@ export function DocumentList({
     return result;
   }, [initialDocuments, overrides]);
 
-  // Realtime subscription for status updates within this workspace
+  // Realtime subscription for status updates within this workspace.
+  // Postgres Changes channels honor RLS — the JWT must be set on Realtime
+  // before subscribing or the broadcast filters out everything (silent miss).
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel(`documents:${workspaceId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "documents",
-          filter: `org_id=eq.${workspaceId}`,
-        },
-        (payload) => {
-          if (payload.eventType === "UPDATE") {
-            const next = payload.new as Document;
-            setOverrides((m) => new Map(m).set(next.id, next));
-          } else if (payload.eventType === "INSERT") {
-            const next = payload.new as Document;
-            setOverrides((m) => new Map(m).set(next.id, next));
-            startTransition(() => router.refresh());
-          } else if (payload.eventType === "DELETE") {
-            const id = (payload.old as { id: string }).id;
-            setOverrides((m) => new Map(m).set(id, "deleted"));
-          }
-        },
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled || !session) return;
+
+      // Force Realtime to use the current access token for RLS-aware channels.
+      supabase.realtime.setAuth(session.access_token);
+
+      channel = supabase
+        .channel(`documents:${workspaceId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "documents",
+            filter: `org_id=eq.${workspaceId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "UPDATE") {
+              const next = payload.new as Document;
+              setOverrides((m) => new Map(m).set(next.id, next));
+            } else if (payload.eventType === "INSERT") {
+              const next = payload.new as Document;
+              setOverrides((m) => new Map(m).set(next.id, next));
+              startTransition(() => router.refresh());
+            } else if (payload.eventType === "DELETE") {
+              const id = (payload.old as { id: string }).id;
+              setOverrides((m) => new Map(m).set(id, "deleted"));
+            }
+          },
+        )
+        .subscribe();
+    })();
 
     return () => {
-      void supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [workspaceId, router]);
 
