@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Props = {
   value: string;
@@ -45,7 +45,7 @@ export function MessageInput({
     >
       <div className="mx-auto max-w-3xl px-4 py-3.5">
         <div className="border-input bg-card focus-within:border-primary/35 focus-within:ring-primary/12 flex items-end gap-2 rounded-[10px] border px-3 py-2 transition-shadow focus-within:ring-[3px]">
-          <Textarea
+          <textarea
             ref={textareaRef}
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -53,7 +53,10 @@ export function MessageInput({
             placeholder={placeholder}
             rows={1}
             disabled={disabled}
-            className="max-h-[180px] min-h-[24px] resize-none border-0 bg-transparent p-0 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={cn(
+              "placeholder:text-muted-foreground/70 flex max-h-[180px] min-h-[24px] w-full resize-none bg-transparent p-0 text-[13px] outline-none",
+              "disabled:cursor-not-allowed disabled:opacity-60",
+            )}
           />
           <Button
             type="submit"

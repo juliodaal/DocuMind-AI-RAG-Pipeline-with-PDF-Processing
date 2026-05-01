@@ -18,7 +18,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "eval": "tsx tests/eval/run-eval.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.58",
@@ -77,7 +79,19 @@
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.5",
-    "zod": "^4.4.1"
+    "zod": "^4.4.1",
+    "storybook": "^10.3.6",
+    "@storybook/nextjs-vite": "^10.3.6",
+    "@chromatic-com/storybook": "^5.1.2",
+    "@storybook/addon-vitest": "^10.3.6",
+    "@storybook/addon-a11y": "^10.3.6",
+    "@storybook/addon-docs": "^10.3.6",
+    "@storybook/addon-onboarding": "^10.3.6",
+    "vite": "^8.0.10",
+    "eslint-plugin-storybook": "^10.3.6",
+    "playwright": "^1.59.1",
+    "@vitest/browser-playwright": "4.1.5",
+    "@vitest/coverage-v8": "4.1.5"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,md,css}": [
