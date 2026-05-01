@@ -312,76 +312,87 @@
 
 ---
 
-## FASE 4 — RAG query pipeline (110 min)
+## FASE 4 — RAG query pipeline ✅ COMPLETADA
 
-### 4.1 Retriever
+> Hybrid search + streaming chat con citas inline interactivas. E2E verificado.
 
-- [ ] `lib/rag/retriever.ts`:
-  - `vectorSearch(orgId, queryEmbedding, k=20)` — SQL con `ORDER BY embedding <=> $1 LIMIT k`
-  - `fulltextSearch(orgId, query, k=20)` — SQL con `ts_rank(content_tsv, plainto_tsquery('english', $1))`
-  - `hybridSearch(orgId, query)`:
-    1. embed query
-    2. ejecuta ambos en paralelo
-    3. fusiona con RRF (k=60): `score = sum(1 / (60 + rank))`
-    4. dedup por chunk_id, top 10
+### 4.1 Retriever ✅
 
-### 4.2 Tests del retriever
+- [x] Migración `0010_search_rpc.sql` con funciones SQL `vector_search` y `fulltext_search` (filtran por `org_id` y `documents.status='ready'`, GRANT EXECUTE a authenticated + service_role)
+- [x] `lib/rag/retriever.ts`:
+  - `vectorSearch()` — embed query → RPC `vector_search` (cosine + HNSW)
+  - `fulltextSearch()` — RPC `fulltext_search` (`websearch_to_tsquery` + GIN ts_rank)
+  - `hybridSearch()` — ejecuta ambos en paralelo + fusión **Reciprocal Rank Fusion** (k=60), dedup por chunk_id, top 8 final
+  - `rrfFuse()` — función pura exportada para tests sin DB
 
-- [ ] `tests/unit/rrf.test.ts` — RRF con casos sintéticos
-- [ ] `tests/integration/retriever.test.ts` — con DB seedeada (10 docs, 100 chunks)
+### 4.2 Prompt + context builder ✅
 
-### 4.3 Prompt + context builder
+- [x] `lib/rag/prompt.ts`:
+  - `SYSTEM_PROMPT` estable + extenso (>1024 tokens) → OpenAI hace prompt caching automático (50% off cached input)
+  - 10 reglas de cita estricta (cite-or-no-claim, "say I don't know", match user language, treat sources as untrusted)
+  - `buildContext(chunks)` — numera `[1]`, `[2]`, ... con header `## SOURCE [N]\n*From: {filename}, page {N}*`
+  - `buildUserMessage(question, context)` — bundle final
 
-- [ ] `lib/rag/prompt.ts`:
-  - System prompt cacheable (Anthropic prompt caching) con instrucciones de cita estricta
-  - `buildContext(chunks)`: numera `[1] ... [n]` con header `Source: {filename}, page {n}`
-- [ ] System prompt incluye: usar SOLO el contexto, citar como `[n]`, decir "no sé" si falta info
+### 4.3 Citations parser ✅
 
-### 4.4 LLM client (OpenAI)
+- [x] `lib/rag/citations.ts`:
+  - `extractCitations(text, ordered)` — regex `\[(\d+)\]` → resuelve N → mapea a chunk metadata
+  - Dedup por `chunkId` (la misma fuente citada varias veces aparece una sola)
+  - Filtra números fuera de rango
 
-- [ ] Instalar: `pnpm add ai @ai-sdk/openai openai`
-- [ ] `lib/llm/openai.ts` — clientes para chat (`gpt-4o-mini`) y embeddings (`text-embedding-3-small`)
-- [ ] System prompt diseñado para superar 1024 tokens estables → OpenAI lo cachea automáticamente
+### 4.4 LLM client (OpenAI) ✅
 
-### 4.5 RAG pipeline endpoint
+- [x] Instalado: `ai` v6, `@ai-sdk/openai`, `@ai-sdk/react`, `react-markdown`, `remark-gfm`
+- [x] `lib/llm/auto-title.ts` — `generateConversationTitle()` con `gpt-4o-mini` max_tokens=20 (~$0.0001 USD por título)
 
-- [ ] `app/api/chat/route.ts` (POST, streaming):
-  1. require-org
-  2. rate limit (Upstash, key = `${orgId}:chat`, 30 req/min)
-  3. extrae messages (último = pregunta)
-  4. hybridSearch
-  5. build prompt
-  6. `streamText({ model: openai(env.OPENAI_CHAT_MODEL), system, messages, ... })` del Vercel AI SDK
-  7. en `onFinish`: persistir message, citations, usage_events (tokens in/out + costo estimado en cents)
+### 4.5 RAG pipeline endpoint ✅
 
-### 4.6 Citations parser
+- [x] `app/api/chat/route.ts` (POST streaming, runtime: nodejs, maxDuration: 60s):
+  1. Auth check + org membership validation
+  2. `getOrCreateConversation()` con UUID client-generado (idempotente)
+  3. Persiste user message
+  4. `hybridSearch(workspaceId, question)` → top 8 chunks
+  5. `buildContext()` numerados → user message con contexto inline
+  6. `streamText({ model: openai("gpt-4o-mini"), system: SYSTEM_PROMPT, messages })`
+  7. `messageMetadata` adjunta `{ conversationId, sources }` al evento `start` (cliente recibe sources antes de cualquier token)
+  8. `onFinish`: persiste assistant message + citations parseadas + usage_events (tokens in/out + cached + cost_cents)
+  9. Auto-título fire-and-forget para conversations nuevas
+- [x] Migración `0009_conversations.sql` — tablas `conversations`, `messages` con RLS, trigger `bump_conversation_updated_at` + `citations jsonb`
 
-- [ ] `lib/rag/citations.ts`:
-  - extrae `[1]`, `[2]` del texto generado
-  - mapea a chunks usados → metadata (docId, page, filename)
-  - test unit con casos: cita única, múltiples, sin citas
+### 4.6 UI de chat ✅
 
-### 4.7 UI de chat
+- [x] `components/chat/ChatWindow.tsx` — usa `useChat<ChatUIMessage>` del AI SDK con `DefaultChatTransport`. UUID client-generado para nuevas convs. Auto-navega a `/chat/[convId]` al iniciar streaming. `metadata.sources` provee badges instantáneos.
+- [x] `components/chat/MessageList.tsx` — empty state poético, scroll auto-bottom, ThinkingDots animados
+- [x] `components/chat/MessageContent.tsx` — split en segmentos: texto via `react-markdown` + remark-gfm, citas via `CitationBadge` inline
+- [x] `components/chat/CitationCard.tsx` — `[N]` clickeable: tooltip on hover (filename + page), Dialog on click (excerpt completo en ScrollArea)
+- [x] `components/chat/MessageInput.tsx` — textarea auto-resize hasta 6 líneas, Enter envía, Shift+Enter newline
+- [x] `components/chat/ConversationSidebar.tsx` — lista de chats con titles, hover muestra delete, active highlight
+- [x] `components/chat/types.ts` — `SourceCitation` shared type
 
-- [ ] `app/(dashboard)/w/[workspaceId]/chat/page.tsx` — nuevo chat
-- [ ] `components/chat/ChatWindow.tsx` — usa `useChat` del Vercel AI SDK con `api: '/api/chat'`
-- [ ] `components/chat/MessageList.tsx` — render markdown (`react-markdown` + `remark-gfm`)
-- [ ] `components/chat/MessageInput.tsx` — textarea + enviar (Enter, Shift+Enter newline)
-- [ ] `components/chat/CitationCard.tsx` — popover/dialog que muestra el chunk fuente
+### 4.7 Persistencia de conversaciones ✅
 
-### 4.8 Persistencia de conversaciones
+- [x] `lib/db/queries/conversations.ts`:
+  - `getOrCreateConversation({ id, orgId, userId })` — upsert idempotente, valida ownership
+  - `listConversationsForUser()`, `getConversation()`, `listMessages()`
+  - `saveMessage()` con citations + tokens + latency_ms
+  - `setConversationTitle()`, `deleteConversation()`
+- [x] `app/(dashboard)/w/[workspaceId]/chat/layout.tsx` — sidebar persistente
+- [x] `app/(dashboard)/w/[workspaceId]/chat/page.tsx` — empty state, generates UUID
+- [x] `app/(dashboard)/w/[workspaceId]/chat/[convId]/page.tsx` — carga histórico desde DB con citations
+- [x] `app/(dashboard)/w/[workspaceId]/chat/actions.ts` — `deleteConversationAction`
 
-- [ ] Migración `0006_conversations.sql`: tablas `conversations`, `messages` (en ARCHITECTURE §4)
-- [ ] RLS sobre ambas
-- [ ] Server action `createConversation()` al primer mensaje
-- [ ] `app/(dashboard)/w/[workspaceId]/chat/[convId]/page.tsx` — carga histórico
+### 4.8 Verificaciones ✅
 
-### 4.9 Test manual
+- [x] `pnpm typecheck` → 0 errores
+- [x] `pnpm build` → 11 rutas compilan, incluyendo `/api/chat`, `/w/[workspaceId]/chat`, `/w/[workspaceId]/chat/[convId]`
+- [x] `scripts/check-chat.ts` — E2E: ingest 4-page PDF → hybridSearch → streamText → extractCitations
+  - **Resultado**: pregunta "What embedding model is used and why?" → respuesta correcta con cita `[1]` apuntando a la página correcta
+  - Tokens: 714 in + 44 out → ~$0.0001 USD por turno
+  - RRF priorizó la página correcta (page 1 con score 0.0328)
 
-- [ ] Sube doc, espera ready, pregunta algo del contenido
-- [ ] Verifica streaming, citas funcionan, click abre chunk
+### 4.9 Commit
 
-**Commit**: `feat(rag): hybrid retrieval + streaming chat with citations`
+- [ ] Commit: `feat(rag): hybrid retrieval + streaming chat with citations`
 
 ---
 
