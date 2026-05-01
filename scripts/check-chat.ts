@@ -126,7 +126,6 @@ async function main() {
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages([
         {
-          id: "1",
           role: "user",
           parts: [{ type: "text", text: userMsg }],
         },

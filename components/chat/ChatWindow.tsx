@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList, type DisplayMessage } from "./MessageList";
 import { MessageInput } from "./MessageInput";
@@ -19,7 +18,6 @@ type Props = {
 type ChatUIMessage = UIMessage<ChatMessageMetadata>;
 
 export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }: Props) {
-  const router = useRouter();
   const [input, setInput] = useState("");
 
   // For new chats, generate the conversation UUID upfront so the URL becomes
@@ -66,20 +64,21 @@ export function ChatWindow({ workspaceId, conversationId, initialMessages = [] }
     },
   });
 
-  // For brand-new chats, navigate to the permalink as soon as we have an
-  // assistant message in the messages array (which means the stream started).
-  // The setHasNavigated call is a one-shot guard so we don't re-navigate on
-  // every streaming token — the eslint rule against setState-in-effect doesn't
-  // distinguish this case from infinite loops.
+  // For brand-new chats, update the URL to the permalink as soon as the
+  // assistant starts responding. We use the History API directly instead of
+  // router.replace because Next.js App Router unmounts the route segment on
+  // navigation — that would abort the in-flight stream and reset the chat.
+  // window.history.replaceState updates the address bar without unmounting,
+  // and the next deliberate navigation/refresh resyncs router state.
   useEffect(() => {
     if (hasNavigated || !isNewChat) return;
     const hasAssistant = messages.some((m) => m.role === "assistant");
     if (hasAssistant) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasNavigated(true);
-      router.replace(`/w/${workspaceId}/chat/${activeConvId}`);
+      window.history.replaceState(null, "", `/w/${workspaceId}/chat/${activeConvId}`);
     }
-  }, [messages, hasNavigated, isNewChat, router, workspaceId, activeConvId]);
+  }, [messages, hasNavigated, isNewChat, workspaceId, activeConvId]);
 
   const handleSubmit = useCallback(() => {
     const text = input.trim();
