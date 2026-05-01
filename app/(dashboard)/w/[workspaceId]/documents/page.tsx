@@ -39,7 +39,7 @@ export default async function DocumentsPage({
 
       <UploadZone
         workspaceId={workspaceId}
-        onCreateUploadSession={(input) => createSession(input)}
+        onCreateUploadSession={createSession}
         onConfirmUpload={confirmUpload}
       />
 
