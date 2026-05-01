@@ -4,6 +4,11 @@ import { env } from "@/lib/env";
 
 const PUBLIC_ROUTES = ["/", "/login", "/signup", "/auth"];
 
+// API routes that handle their own auth (or are intentionally public).
+// /api/inngest is reached by the Inngest dev server / cloud worker for
+// autodiscovery, sync, and signed event delivery — must not be gated.
+const PUBLIC_API_PREFIXES = ["/api/inngest"];
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -32,7 +37,9 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isPublic =
+    PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    PUBLIC_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
