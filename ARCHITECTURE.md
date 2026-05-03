@@ -1,67 +1,67 @@
-# DocuMind AI — Arquitectura
+# DocuMind AI — Architecture
 
-> RAG multi-tenant que ingiere PDFs y documentos, genera embeddings, y responde preguntas en lenguaje natural con fuentes citadas.
-
----
-
-## 1. Objetivos del sistema
-
-| Capacidad                        | Detalle                                                                                                                                             |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Multi-tenant**                 | Aislamiento lógico por `organization_id` con Row Level Security (RLS). Un mismo cluster sirve N clientes.                                           |
-| **Ingesta de documentos**        | PDF (prioridad), DOCX, TXT, MD. Subida directa del usuario → Supabase Storage → pipeline asíncrono.                                                 |
-| **Búsqueda semántica + híbrida** | Vector search (pgvector HNSW) combinado con BM25/full-text via RRF (Reciprocal Rank Fusion).                                                        |
-| **Q&A con citas**                | Respuesta en streaming + citas verificables (documento, página, fragmento).                                                                         |
-| **Observabilidad**               | Tracking de tokens/costo por tenant en DB (`usage_events`), logs estructurados con pino.                                                            |
-| **Seguridad**                    | RLS a nivel DB, Storage con buckets privados y paths por tenant, JWT con `org_id`, rate limiting por tenant.                                        |
-| **Costo**                        | Diseñado para correr en free tiers (Supabase, Vercel, Inngest, Upstash). Único costo variable: OpenAI con modelos económicos (~céntimos para demo). |
+> Multi-tenant RAG that ingests PDFs and documents, generates embeddings, and answers natural-language questions with cited sources.
 
 ---
 
-## 2. Stack tecnológico
+## 1. System goals
 
-### Capa de aplicación
+| Capability                   | Detail                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Multi-tenant**             | Logical isolation by `organization_id` with Row Level Security (RLS). One cluster serves N customers.                                            |
+| **Document ingestion**       | PDF (priority), DOCX, TXT, MD. Direct user upload → Supabase Storage → asynchronous pipeline.                                                    |
+| **Semantic + hybrid search** | Vector search (pgvector HNSW) combined with BM25/full-text via RRF (Reciprocal Rank Fusion).                                                     |
+| **Q&A with citations**       | Streaming answer + verifiable citations (document, page, fragment).                                                                              |
+| **Observability**            | Per-tenant token/cost tracking in DB (`usage_events`), structured logs with pino.                                                                |
+| **Security**                 | RLS at DB level, Storage with private buckets and per-tenant paths, JWT carrying `org_id`, per-tenant rate limiting.                             |
+| **Cost**                     | Designed to run on free tiers (Supabase, Vercel, Inngest, Upstash). Only variable cost: OpenAI with economical models (~cents for demo traffic). |
+
+---
+
+## 2. Tech stack
+
+### Application layer
 
 - **Frontend + Backend**: Next.js 15 (App Router, Server Components, Server Actions, Streaming)
-- **Lenguaje**: TypeScript estricto
+- **Language**: strict TypeScript
 - **UI**: Tailwind CSS + shadcn/ui + Radix
-- **Estado/datos**: TanStack Query (cliente), Server Components (servidor)
-- **Streaming chat**: Vercel AI SDK (`ai` package) con `useChat`
+- **State / data**: TanStack Query (client), Server Components (server)
+- **Streaming chat**: Vercel AI SDK (`ai` package) with `useChat`
 
-### Capa de datos
+### Data layer
 
-- **Auth + Postgres + Storage**: Supabase (Postgres 15 + pgvector + Auth + Realtime + Storage S3-compatible)
-- **Vector store**: `pgvector` con índice HNSW (operador `<=>` cosine)
-- **Storage de archivos**: Supabase Storage (buckets privados con políticas RLS y signed URLs)
+- **Auth + Postgres + Storage**: Supabase (Postgres 15 + pgvector + Auth + Realtime + S3-compatible Storage)
+- **Vector store**: `pgvector` with HNSW index (cosine `<=>` operator)
+- **File storage**: Supabase Storage (private buckets with RLS policies and signed URLs)
 - **Cache + rate limit**: Upstash Redis (`@upstash/ratelimit`)
 
-### Capa de IA (todo OpenAI, optimizado para costo)
+### AI layer (all OpenAI, optimized for cost)
 
-- **Orquestación RAG**: LangChain JS (solo `RecursiveCharacterTextSplitter`) — uso quirúrgico, sin envoltorios pesados
-- **Embeddings**: OpenAI `text-embedding-3-small` (1536 dims, **$0.02/1M tokens** — el más barato de OpenAI)
-- **LLM principal (chat + auto-título)**: OpenAI `gpt-4o-mini` (**$0.15/1M input, $0.60/1M output**, prompt caching automático para prompts ≥1024 tokens con 50% descuento en input cacheado)
-- **Re-ranker**: ❌ omitido en MVP (Cohere genera costo extra). Se confía en hybrid search + RRF
-- **Parser PDF**: `unpdf` (sin dependencias nativas, funciona en serverless)
-- **Observabilidad LLM**: tabla `usage_events` en Postgres + logs estructurados (sin Langfuse cloud para evitar otro proveedor; opcional self-host en v1.1)
+- **RAG orchestration**: LangChain JS (only `RecursiveCharacterTextSplitter`) — surgical use, no heavy wrappers
+- **Embeddings**: OpenAI `text-embedding-3-small` (1536 dims, **$0.02/1M tokens** — the cheapest in OpenAI's lineup)
+- **Main LLM (chat + auto-titles)**: OpenAI `gpt-4o-mini` (**$0.15/1M input, $0.60/1M output**, automatic prompt caching for prompts ≥1024 tokens with 50% discount on cached input)
+- **Re-ranker**: ❌ omitted in MVP (Cohere adds extra cost). Relies on hybrid search + RRF.
+- **PDF parser**: `unpdf` (no native dependencies, runs in serverless)
+- **LLM observability**: `usage_events` Postgres table + structured logs (no Langfuse cloud to avoid another vendor; optional self-host in v1.1)
 
-### Procesamiento asíncrono
+### Asynchronous processing
 
-- **Ingesta**: Inngest (`step.run`, retries automáticos, dashboard, free tier) ejecutándose dentro de Next.js como route handler
-- **Alternativa nativa Supabase**: Supabase Edge Functions (Deno) + invocación desde Server Action — viable pero menos cómoda para steps con retries que Inngest
+- **Ingestion**: Inngest (`step.run`, automatic retries, dashboard, generous free tier) running inside Next.js as a route handler
+- **Native Supabase alternative**: Supabase Edge Functions (Deno) + invocation from Server Action — viable but less ergonomic for multi-step pipelines with retries than Inngest
 
-### Infraestructura
+### Infrastructure
 
-- **Hosting app**: Vercel
+- **App hosting**: Vercel
 - **CI/CD**: GitHub Actions (lint, typecheck, tests, build)
-- **Migraciones DB**: Supabase CLI (`supabase/migrations/`)
+- **DB migrations**: Supabase CLI (`supabase/migrations/`)
 
 ---
 
-## 3. Arquitectura de alto nivel
+## 3. High-level architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                         CLIENTE (Next.js 15)                          │
+│                         CLIENT (Next.js 15)                           │
 │  ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌────────────────┐   │
 │  │ Auth UI  │  │ Workspace  │  │ Documents  │  │  Chat (stream) │   │
 │  └──────────┘  └────────────┘  └────────────┘  └────────────────┘   │
@@ -83,9 +83,9 @@
         ▼              ▼                           ▼
 ┌──────────────┐  ┌──────────────────┐  ┌────────────────────────┐
 │  OpenAI API  │  │  Supabase        │  │  Supabase Storage      │
-│              │  │  Postgres +      │  │  (bucket privado,      │
+│              │  │  Postgres +      │  │  (private bucket,      │
 │  embeddings: │  │  pgvector        │  │   tenant-prefixed)     │
-│  text-embed- │  │  (RLS por org)   │  │                        │
+│  text-embed- │  │  (per-org RLS)   │  │                        │
 │  ding-3-small│  │                  │  │  documents/            │
 │              │  │  ┌────────────┐  │  │   {org_id}/            │
 │  chat:       │  │  │ documents  │  │  │   {document_id}/       │
@@ -105,15 +105,15 @@
 
 ---
 
-## 4. Modelo de datos (Postgres + pgvector)
+## 4. Data model (Postgres + pgvector)
 
 ```sql
 -- Multi-tenancy
 organizations          (id, name, slug, owner_id, plan, created_at)
-organization_members   (org_id, user_id, role, joined_at)         -- PK compuesta
+organization_members   (org_id, user_id, role, joined_at)         -- composite PK
 profiles               (id = auth.users.id, email, full_name)
 
--- Documentos
+-- Documents
 documents              (id, org_id, uploader_id, filename, mime_type,
                         storage_path, size_bytes, sha256, status, error,
                         page_count, created_at, processed_at)
@@ -129,147 +129,147 @@ document_chunks        (id, document_id, org_id, chunk_index,
   -- INDEX GIN:  USING gin (content_tsv)
   -- INDEX btree(org_id, document_id)
 
--- Conversaciones
+-- Conversations
 conversations          (id, org_id, user_id, title, created_at, updated_at)
 messages               (id, conversation_id, role, content, citations jsonb,
                         tokens_in, tokens_out, model, latency_ms, created_at)
 
--- Telemetría
+-- Telemetry
 usage_events           (id, org_id, user_id, kind, tokens, cost_cents, created_at)
                        -- kind: 'embedding' | 'chat' | 'rerank'
 ```
 
-**RLS policies** (todas las tablas con `org_id`): el JWT incluye `app_metadata.org_id`. Política tipo `org_id = (auth.jwt() -> 'app_metadata' ->> 'org_id')::uuid`.
+**RLS policies** (every table with `org_id`): the JWT carries `app_metadata.org_id`. Policy of the form `org_id = (auth.jwt() -> 'app_metadata' ->> 'org_id')::uuid`.
 
 ---
 
-## 5. Flujos de datos
+## 5. Data flows
 
-### 5.1 Ingesta (asíncrona)
+### 5.1 Ingestion (asynchronous)
 
 ```
-[Usuario sube PDF]
-  → Server Action: valida tamaño/tipo, crea row `documents` (status='uploading'),
-    genera signed upload URL de Supabase Storage
+[User uploads a PDF]
+  → Server Action: validates size/type, creates `documents` row (status='uploading'),
+    generates a Supabase Storage signed upload URL
     (path: documents/{org_id}/{doc_id}/{filename})
-[Cliente hace PUT directo a Supabase Storage con la signed URL]
-  → confirmUpload Server Action: marca status='queued', emite evento Inngest
+[Client PUTs directly to Supabase Storage with the signed URL]
+  → confirmUpload Server Action: marks status='queued', emits Inngest event
 [Inngest worker]
-  1. Descarga objeto vía Supabase Storage API (service role)
+  1. Downloads object via Supabase Storage API (service role)
   2. UPDATE documents SET status='processing'
-  3. Parse PDF (unpdf) → texto + page map
+  3. Parse PDF (unpdf) → text + page map
   4. Chunking: RecursiveCharacterTextSplitter
      - chunk_size=800 tokens, overlap=120
      - separators: ["\n\n", "\n", ". ", " "]
-     - preserva page_number en metadata
-  5. Embeddings batch (OpenAI, 100 chunks/llamada)
-  6. INSERT batch en document_chunks
+     - preserves page_number in metadata
+  5. Batch embeddings (OpenAI, 100 chunks/call)
+  6. Batch INSERT into document_chunks
   7. UPDATE documents SET status='ready', processed_at=now()
-  8. Emit usage_events (tokens consumidos)
-[Cliente]
-  Realtime (Supabase) o polling cada 2s actualiza estado en UI
+  8. Emit usage_events (tokens consumed)
+[Client]
+  Realtime (Supabase) or 2s polling updates the UI status
 ```
 
 ### 5.2 Query (RAG)
 
 ```
-[Usuario escribe pregunta en chat]
+[User types a question in chat]
   → Server Action / Route Handler (streaming)
   1. Rate limit check (Upstash, key = org_id)
-  2. Embed la query (text-embedding-3-small)
+  2. Embed the query (text-embedding-3-small)
   3. Hybrid search:
-     - vector: top 20 por similitud coseno (filtrado WHERE org_id=...)
-     - fulltext: top 20 por ts_rank(content_tsv, query)
-     - fusion RRF (Reciprocal Rank Fusion) → top 8
+     - vector: top 20 by cosine similarity (filtered WHERE org_id=...)
+     - fulltext: top 20 by ts_rank(content_tsv, query)
+     - RRF fusion (Reciprocal Rank Fusion) → top 8
   4. Build prompt:
-     - System: instrucciones de cita estricta (estable → cacheable por OpenAI)
-     - Context: chunks numerados [1], [2], ... con metadata
-     - User: pregunta original
+     - System: strict citation instructions (stable → cacheable by OpenAI)
+     - Context: numbered chunks [1], [2], ... with metadata
+     - User: original question
   5. Stream `gpt-4o-mini` (Vercel AI SDK)
-  6. Parse citas del stream (formato [n] inline)
-  7. Persist message + citations en DB
-  8. Emit usage_events (tokens in/out, costo estimado)
-[Cliente]
-  - Renderiza tokens en streaming
-  - Citas inline → onClick abre panel con chunk + link a documento original
+  6. Parse citations from the stream (inline [n] format)
+  7. Persist message + citations to DB
+  8. Emit usage_events (tokens in/out, estimated cost)
+[Client]
+  - Renders streaming tokens
+  - Inline citations → onClick opens a panel with the chunk + link to the original document
 ```
 
 ---
 
-## 6. Decisiones técnicas clave (con trade-offs)
+## 6. Key technical decisions (with trade-offs)
 
 ### 6.1 pgvector vs Pinecone/Weaviate/Qdrant
 
-**Elegido**: pgvector
+**Chosen**: pgvector
 
-- ✅ Una sola DB que mantener (auth, datos, vectores)
-- ✅ JOINs nativos con metadata (filtro por `org_id` en el mismo query)
-- ✅ Costo muy bajo a escala MVP
-- ✅ HNSW en pgvector ≥0.5 es competitivo (~95% recall)
-- ❌ A >10M chunks por tenant conviene migrar a vector DB dedicado
-- 🔁 **Migración futura**: abstracción `VectorStore` interface (`upsert`, `search`)
+- ✅ A single DB to maintain (auth, data, vectors)
+- ✅ Native JOINs with metadata (filter by `org_id` in the same query)
+- ✅ Very low cost at MVP scale
+- ✅ HNSW in pgvector ≥0.5 is competitive (~95% recall)
+- ❌ Beyond ~10M chunks per tenant, migration to a dedicated vector DB makes sense
+- 🔁 **Future migration**: `VectorStore` interface abstraction (`upsert`, `search`)
 
-### 6.2 Multi-tenancy: schema compartido + RLS
+### 6.2 Multi-tenancy: shared schema + RLS
 
-**Elegido**: shared schema, `org_id` en cada tabla, RLS forzado
+**Chosen**: shared schema, `org_id` on every table, enforced RLS
 
-- ✅ Una sola DB, una sola migración, ops simples
-- ✅ Aislamiento garantizado a nivel Postgres (no solo aplicación)
-- ❌ Tenant gigante puede degradar al resto → mitigar con índices parciales y quotas
-- 🔁 Alternativas: schema-per-tenant (más aislamiento, peor ops), DB-per-tenant (enterprise)
+- ✅ One DB, one migration story, simple ops
+- ✅ Isolation guaranteed at the Postgres level (not just application)
+- ❌ A noisy tenant could degrade neighbors → mitigate with partial indexes and quotas
+- 🔁 Alternatives: schema-per-tenant (more isolation, worse ops), DB-per-tenant (enterprise)
 
-### 6.3 Cola de procesamiento asíncrono
+### 6.3 Asynchronous processing queue
 
-**Elegido**: Inngest (free tier generoso, `step.run` con retries automáticos, dashboard incluido)
+**Chosen**: Inngest (generous free tier, `step.run` with automatic retries, dashboard included)
 
-- ✅ Se ejecuta como route handler dentro de Next.js → cero infra extra
-- ✅ Steps idempotentes con state durable; reintentos por step
-- ✅ Dashboard visual de runs/fallos sin montar nada
-- ❌ Vendor lock-in moderado → mitigado con interfaz `IngestionQueue`
-- 🔁 Alternativa nativa: Supabase Edge Functions (Deno). Menos cómoda para multi-step con retries pero evita un proveedor más
-- 🔁 Alternativa local-only: Postgres queue (`pg-boss`) sobre el mismo Supabase — máxima portabilidad, más código de orquestación
+- ✅ Runs as a Next.js route handler → zero extra infrastructure
+- ✅ Idempotent steps with durable state; per-step retries
+- ✅ Visual run/failure dashboard with no setup
+- ❌ Moderate vendor lock-in → mitigated by an `IngestionQueue` interface
+- 🔁 Native alternative: Supabase Edge Functions (Deno). Less ergonomic for multi-step retries but avoids one more provider
+- 🔁 Local-only alternative: Postgres queue (`pg-boss`) on the same Supabase — maximum portability, more orchestration code
 
-### 6.4 Modelos de IA (todos OpenAI, optimización de costo)
+### 6.4 AI models (all OpenAI, cost optimization)
 
 **Embeddings**: `text-embedding-3-small` (1536 dims, $0.02/1M tokens)
 
-- El más barato de OpenAI con calidad competitiva (MTEB ~62)
-- Si sube exigencia futura: switch a `text-embedding-3-large` cambiando una env var
+- The cheapest in OpenAI's lineup with competitive quality (MTEB ~62)
+- If quality demand rises in the future: switch to `text-embedding-3-large` by changing one env var
 
 **Chat**: `gpt-4o-mini` ($0.15/1M input, $0.60/1M output)
 
-- Streaming nativo, function calling, prompt caching automático
-- Calidad muy alta para RAG simple (no es razonamiento complejo)
-- Coste estimado para demo de portfolio: ~$0.01–0.05 USD/mes con tráfico moderado
-- Decisión consciente: NO usar Claude/GPT-5 — el delta de calidad no justifica el costo en un demo
+- Native streaming, function calling, automatic prompt caching
+- Very high quality for simple RAG (not complex reasoning)
+- Estimated cost for portfolio demo: ~$0.01–0.05 USD/month with moderate traffic
+- Conscious decision: do NOT use Claude/GPT-5 — the quality delta does not justify the cost in a demo
 
 ### 6.5 Chunking strategy
 
-**Elegido**: Recursive character (LangChain) con conciencia de página
+**Chosen**: Recursive character (LangChain) with page awareness
 
-- chunk_size: 800 tokens (balance contexto/precisión)
+- chunk_size: 800 tokens (context/precision balance)
 - overlap: 120 tokens (~15%)
-- Preserva `page_number` y `section` en metadata
-- 🔁 Upgrade futuro: semantic chunking (split por similitud), structure-aware (markdown headings)
+- Preserves `page_number` and `section` in metadata
+- 🔁 Future upgrade: semantic chunking (split by similarity), structure-aware (markdown headings)
 
-### 6.6 Citations: function calling vs format inline
+### 6.6 Citations: function calling vs inline format
 
-**Elegido**: format inline `[n]` + parser regex en el stream
+**Chosen**: inline `[n]` format + regex parser on the stream
 
-- ✅ Funciona con streaming nativo
-- ✅ Simple, sin tool-use overhead
-- ✅ El system prompt estable es cacheado por OpenAI automáticamente (≥1024 tokens)
-- ❌ Menos estricto que JSON forzado
-- Mitigación: prompt con few-shot examples + validación post-stream
+- ✅ Works with native streaming
+- ✅ Simple, no tool-use overhead
+- ✅ The stable system prompt is automatically cached by OpenAI (≥1024 tokens)
+- ❌ Less strict than enforced JSON
+- Mitigation: prompt with few-shot examples + post-stream validation
 
 ### 6.7 BYOK (Bring Your Own Key)
 
-**MVP**: NO. Plataforma usa su propia API key, cobra por uso.
-**v1.1**: SÍ, columna `organizations.openai_key_encrypted` cifrada con `pgsodium` (extensión nativa de Supabase para column-level encryption).
+**MVP**: NO. The platform uses its own API key, charges per use.
+**v1.1**: YES, `organizations.openai_key_encrypted` column ciphered with `pgsodium` (Supabase native extension for column-level encryption).
 
 ---
 
-## 7. Estructura de carpetas
+## 7. Folder structure
 
 ```
 documind-ai/
@@ -284,7 +284,7 @@ documind-ai/
 │   │       │   ├── page.tsx
 │   │       │   └── [docId]/page.tsx
 │   │       ├── chat/
-│   │       │   ├── page.tsx      # nuevo chat
+│   │       │   ├── page.tsx      # new chat
 │   │       │   └── [convId]/page.tsx
 │   │       └── settings/page.tsx
 │   ├── api/
@@ -303,32 +303,32 @@ documind-ai/
 │   ├── auth/
 │   │   ├── server.ts             # createClient (server-side Supabase)
 │   │   ├── middleware.ts
-│   │   └── require-org.ts        # helper para Server Actions
+│   │   └── require-org.ts        # helper for Server Actions
 │   ├── db/
 │   │   ├── client.ts
-│   │   ├── schema.ts             # Zod schemas espejo de DB
-│   │   └── queries/              # query helpers tipados
+│   │   ├── schema.ts             # Zod schemas mirroring the DB
+│   │   └── queries/              # typed query helpers
 │   ├── storage/
 │   │   ├── supabase.ts           # signed upload/download URLs, get/put
 │   │   └── keys.ts               # tenantKey() helper
 │   ├── ingestion/
-│   │   ├── parser.ts             # PDF → texto + pages
+│   │   ├── parser.ts             # PDF → text + pages
 │   │   ├── chunker.ts            # RecursiveCharacterTextSplitter wrapper
 │   │   ├── embedder.ts           # batch embedding
-│   │   └── pipeline.ts           # orquesta todo
+│   │   └── pipeline.ts           # orchestrates everything
 │   ├── rag/
 │   │   ├── retriever.ts          # hybrid search + RRF
-│   │   ├── reranker.ts           # Cohere wrapper (opcional)
+│   │   ├── reranker.ts           # Cohere wrapper (optional)
 │   │   ├── prompt.ts             # system prompt + context builder
-│   │   ├── citations.ts          # parser de [n] inline
+│   │   ├── citations.ts          # inline [n] parser
 │   │   └── pipeline.ts           # query → answer (streaming)
 │   ├── llm/
-│   │   ├── openai.ts             # cliente OpenAI (embeddings + chat)
-│   │   └── usage.ts              # tracking de tokens y costo estimado
+│   │   ├── openai.ts             # OpenAI client (embeddings + chat)
+│   │   └── usage.ts              # token + estimated cost tracking
 │   ├── ratelimit/
-│   │   └── index.ts              # Upstash + tier por org
+│   │   └── index.ts              # Upstash + per-org tier
 │   └── observability/
-│       └── logger.ts             # pino (logs estructurados)
+│       └── logger.ts             # pino (structured logs)
 │
 ├── supabase/
 │   └── migrations/
@@ -343,11 +343,11 @@ documind-ai/
 │   │   ├── citations.test.ts
 │   │   └── rrf.test.ts
 │   ├── integration/
-│   │   └── ingestion.test.ts     # con DB de test
+│   │   └── ingestion.test.ts     # against a test DB
 │   ├── e2e/
 │   │   └── chat-flow.spec.ts     # Playwright
 │   └── eval/
-│       ├── golden-set.json       # 20 Q&A de referencia
+│       ├── golden-set.json       # 20 reference Q&A
 │       └── run-eval.ts
 │
 ├── .env.example
@@ -365,40 +365,40 @@ documind-ai/
 
 ## 8. Performance — checklist
 
-- [ ] Índice HNSW con `m=16, ef_construction=64` (defaults razonables)
-- [ ] `SET hnsw.ef_search = 40` por sesión de query
-- [ ] Embeddings en batch (100 chunks/call) con concurrencia limitada (p-limit 3)
-- [ ] System prompt ≥1024 tokens (estable) → OpenAI lo cachea automáticamente (50% off input)
-- [ ] Connection pooling de Postgres (Supabase pooler en transaction mode)
-- [ ] React Server Components donde no haga falta interactividad
-- [ ] Streaming token-a-token (no esperar respuesta completa)
-- [ ] Imágenes/UI: `next/image`, code splitting automático
+- [ ] HNSW index with `m=16, ef_construction=64` (reasonable defaults)
+- [ ] `SET hnsw.ef_search = 40` per query session
+- [ ] Batched embeddings (100 chunks/call) with limited concurrency (p-limit 3)
+- [ ] System prompt ≥1024 tokens (stable) → OpenAI caches it automatically (50% off input)
+- [ ] Postgres connection pooling (Supabase pooler in transaction mode)
+- [ ] React Server Components wherever interactivity isn't needed
+- [ ] Token-by-token streaming (don't wait for the full response)
+- [ ] Images / UI: `next/image`, automatic code splitting
 
 ---
 
-## 9. Seguridad — checklist
+## 9. Security — checklist
 
-- [ ] RLS habilitado en todas las tablas con `org_id`
-- [ ] Service role key NUNCA expuesta al cliente (solo en server)
-- [ ] Supabase Storage: bucket privado, signed upload/download URLs con expiry corto (5 min); políticas de Storage que validan `org_id` desde el path
-- [ ] Validación de tipo MIME y tamaño en server (no confiar en cliente)
-- [ ] Rate limiting por `org_id` y por `user_id` (Upstash)
-- [ ] Secrets en Vercel env vars, nunca en repo
-- [ ] CSP headers configurados en `next.config.ts`
-- [ ] CSRF: Server Actions de Next.js ya lo manejan
-- [ ] SQL injection: query builders parametrizados (postgres-js)
-- [ ] Sanitización de output del LLM antes de renderizar (markdown safe)
+- [ ] RLS enabled on every table that has `org_id`
+- [ ] Service role key NEVER exposed to the client (server-only)
+- [ ] Supabase Storage: private bucket, signed upload/download URLs with short expiry (5 min); Storage policies that validate `org_id` from the path
+- [ ] MIME type and size validation on the server (don't trust the client)
+- [ ] Rate limiting per `org_id` and per `user_id` (Upstash)
+- [ ] Secrets in Vercel env vars, never in repo
+- [ ] CSP headers configured in `next.config.ts`
+- [ ] CSRF: Next.js Server Actions handle this natively
+- [ ] SQL injection: parameterized query builders (postgres-js)
+- [ ] LLM output sanitization before rendering (markdown safe)
 
 ---
 
-## 10. Testing — pirámide
+## 10. Testing — pyramid
 
-| Tipo            | Herramienta                      | Cobertura objetivo                                                         |
-| --------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| **Unit**        | Vitest                           | chunker, citations parser, RRF, prompt builder, key tenant scoping         |
-| **Integration** | Vitest + supabase test container | pipeline ingesta completo (PDF de prueba), retriever hybrid                |
-| **E2E**         | Playwright                       | login → upload → wait ready → chat con cita verificable                    |
-| **Eval LLM**    | Script custom                    | 20 Q&A golden set, mide: groundedness, citation accuracy, answer relevance |
+| Type            | Tool                             | Target coverage                                                                |
+| --------------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| **Unit**        | Vitest                           | chunker, citations parser, RRF, prompt builder, key tenant scoping             |
+| **Integration** | Vitest + Supabase test container | full ingestion pipeline (test PDF), hybrid retriever                           |
+| **E2E**         | Playwright                       | login → upload → wait ready → chat with verifiable citation                    |
+| **LLM eval**    | Custom script                    | 20 Q&A golden set, measures: groundedness, citation accuracy, answer relevance |
 
 ---
 
@@ -414,34 +414,34 @@ documind-ai/
                               ▼                      ▼              ▼
                       ┌────────────────────┐  ┌──────────┐   ┌──────────┐
                       │ Supabase           │  │ Upstash  │   │ Inngest  │
-                      │ (Postgres+pgvector,│  │ (Redis,  │   │ (cola de │
-                      │  Auth, Storage,    │  │  rate    │   │  ingesta)│
+                      │ (Postgres+pgvector,│  │ (Redis,  │   │ (ingest  │
+                      │  Auth, Storage,    │  │  rate    │   │  queue)  │
                       │  Realtime)         │  │  limit)  │   │          │
                       └────────────────────┘  └──────────┘   └──────────┘
 ```
 
 ---
 
-## 12. Roadmap post-MVP (no para hoy, para README)
+## 12. Post-MVP roadmap (not for today, for the README)
 
-- v1.1: BYOK + soporte DOCX/MD/HTML + opción de upgrade a `gpt-4o` o Claude Sonnet 4.6 por workspace
-- v1.2: Citations clicables abren PDF en página exacta (PDF.js viewer)
-- v1.3: Multi-document conversations con memoria
-- v1.4: Re-ranker (Cohere o cross-encoder local) cuando los volúmenes lo justifiquen
-- v1.5: Agente con tools (search web, calculadora) sobre el corpus
-- v2.0: Langfuse self-host + migración optativa a vector DB dedicado (Qdrant) si >10M chunks
+- v1.1: BYOK + DOCX/MD/HTML support + per-workspace upgrade option to `gpt-4o` or Claude Sonnet 4.6
+- v1.2: Clickable citations open the PDF at the exact page (PDF.js viewer)
+- v1.3: Multi-document conversations with memory
+- v1.4: Re-ranker (Cohere or local cross-encoder) once volumes justify it
+- v1.5: Agent with tools (web search, calculator) over the corpus
+- v2.0: Self-hosted Langfuse + optional migration to a dedicated vector DB (Qdrant) if >10M chunks
 
-## 13. Costo estimado del demo (para poner en README)
+## 13. Demo cost estimate (for the README)
 
-Asumiendo uso de portfolio: 50 PDFs ingeridos (10 pgs c/u promedio) + 200 queries en chat al mes:
+Assuming portfolio usage: 50 PDFs ingested (~10 pages each on average) + 200 chat queries per month:
 
-- **Supabase** (Free): $0 — DB hasta 500MB, Storage 1GB, Auth 50k MAU
-- **Vercel** (Hobby): $0 — 100GB bandwidth, builds ilimitados para hobby
-- **Inngest** (Free): $0 — 50k step runs/mes
-- **Upstash Redis** (Free): $0 — 10k requests/día
+- **Supabase** (Free): $0 — DB up to 500MB, Storage 1GB, Auth 50k MAU
+- **Vercel** (Hobby): $0 — 100GB bandwidth, unlimited builds for hobby
+- **Inngest** (Free): $0 — 50k step runs/month
+- **Upstash Redis** (Free): $0 — 10k requests/day
 - **OpenAI**:
-  - Embeddings ingest: 50 docs × ~5K tokens = 250K tokens × $0.02/1M = **$0.005**
-  - Embeddings de queries: 200 × ~10 tokens = 2K tokens = ~$0.0001
+  - Ingestion embeddings: 50 docs × ~5K tokens = 250K tokens × $0.02/1M = **$0.005**
+  - Query embeddings: 200 × ~10 tokens = 2K tokens = ~$0.0001
   - Chat: 200 queries × (3K input + 400 output) = 600K input + 80K output → 600K × $0.15/1M + 80K × $0.60/1M = **$0.14**
-  - **Total OpenAI: ~$0.15 USD/mes**
-- **Total mensual: ~$0.15 USD** (literalmente céntimos)
+  - **OpenAI total: ~$0.15 USD/month**
+- **Monthly total: ~$0.15 USD** (literally cents)
